@@ -1,0 +1,25 @@
+export const TAGS = [
+  'Fraternity',
+  'House Party',
+  'Club Night',
+  'Live Music',
+  'DJ Set',
+  'Theme Night',
+  'Glow Party',
+  'Costume Required',
+  'Outdoor Friendly',
+  'Bonfire',
+  'BYOB',
+  'Open Bar',
+  'Free Entry',
+  'Cover Charge',
+  '21+ Only',
+  'All Ages',
+  'Game Night',
+  'Chill Vibes',
+  'High Energy',
+  'Wine Wednesday',
+  'Booths',
+];
+
+export default TAGS;

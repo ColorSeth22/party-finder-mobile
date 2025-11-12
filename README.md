@@ -1,50 +1,155 @@
-# Welcome to your Expo app 👋
+# PartyFinder Mobile 🎉
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A mobile app for finding and tracking campus parties and events, built with React Native and Expo.
 
-## Get started
+## Features
 
-1. Install dependencies
+- 📍 **Interactive Map** - View all active events on a map with your current location
+- 📋 **Events List** - Browse upcoming events sorted by time with distance information
+- 👤 **User Profiles** - Login, register, and manage your account
+- ⚙️ **Settings** - Customize distance units, auto-refresh, and theme preferences
+- 🎯 **Location-Based** - See how far events are from your current location
 
-   ```bash
+## Prerequisites
+
+- Node.js (v16 or later)
+- npm or yarn
+- Expo Go app on your iOS or Android device
+
+## Setup
+
+1. **Install dependencies**
+
+   ```powershell
    npm install
    ```
 
-2. Start the app
+2. **Configure API endpoint**
 
-   ```bash
-   npx expo start
+   Open `app/_layout.tsx` and update the `apiBaseUrl` prop in the `AuthProvider`:
+   
+   ```tsx
+   <AuthProvider apiBaseUrl="https://your-api-url.com">
    ```
 
-In the output, you'll find options to open the app in a
+3. **Configure Google Maps (Android only)**
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+   If using Android, add your Google Maps API key to `app.json`:
+   
+   ```json
+   "android": {
+     "config": {
+       "googleMaps": {
+         "apiKey": "YOUR_GOOGLE_MAPS_API_KEY"
+       }
+     }
+   }
+   ```
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Running the App
 
-## Get a fresh project
+1. **Start the Expo development server**
 
-When you're ready, run:
+   ```powershell
+   npm start
+   ```
 
-```bash
-npm run reset-project
+   Or with specific options:
+
+   ```powershell
+   # Start with tunnel (recommended for testing on physical device)
+   npm start -- --tunnel
+
+   # Start for Android
+   npm run android
+
+   # Start for iOS  
+   npm run ios
+
+   # Start for web
+   npm run web
+   ```
+
+2. **Open in Expo Go**
+
+   - Install Expo Go on your phone ([iOS](https://apps.apple.com/app/expo-go/id982107779) | [Android](https://play.google.com/store/apps/details?id=host.exp.exponent))
+   - Scan the QR code shown in the terminal
+   - The app will load on your device
+
+## Project Structure
+
+```
+PartyFinderMobile/
+├── app/                    # Expo Router pages
+│   ├── (tabs)/            # Tab navigation screens
+│   │   ├── index.tsx      # Welcome screen
+│   │   ├── map.tsx        # Map view
+│   │   ├── events.tsx     # Events list
+│   │   └── profile.tsx    # Profile & settings
+│   └── _layout.tsx        # Root layout with providers
+├── contexts/              # React contexts
+│   ├── AuthContext.tsx    # Authentication state
+│   └── SettingsContext.tsx # App settings
+├── hooks/                 # Custom hooks
+│   ├── useGeolocation.ts  # Location tracking
+│   └── useEvents.ts       # Events data fetching
+├── types/                 # TypeScript definitions
+│   └── index.ts
+├── utils/                 # Utility functions
+│   └── distance.ts        # Distance calculations
+└── components/            # Reusable components
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Key Dependencies
 
-## Learn more
+- **expo** - React Native framework
+- **expo-router** - File-based routing
+- **expo-location** - Location services
+- **react-native-maps** - Map component
+- **@react-native-async-storage/async-storage** - Persistent storage
+- **react-navigation** - Navigation library
 
-To learn more about developing your project with Expo, look at the following resources:
+## Features
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### Map Screen
+- Shows all active events as markers
+- Displays your current location with a radius circle
+- Tap markers to view event details
+- Pull to refresh events
 
-## Join the community
+### Events List Screen  
+- Browse all upcoming events
+- Sort by start time
+- See distance from your location
+- Tap to expand and view full details
+- Filter to only show active events
 
-Join our community of developers creating universal apps.
+### Profile Screen
+- Login/Register with email and password
+- View account information
+- Manage settings:
+  - Distance unit (miles/km)
+  - Show distance labels
+  - Auto refresh events
+  - Theme (light/dark/system)
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Development
+
+Run linting:
+```powershell
+npm run lint
+```
+
+## Notes
+
+- The app requires location permissions to show nearby events
+- Map requires Google Maps API key for Android (iOS uses Apple Maps)
+- Events auto-refresh every 30 seconds when enabled in settings
+- Guest mode available with limited features
+
+## Learn More
+
+- [Expo documentation](https://docs.expo.dev/)
+- [Expo Router](https://docs.expo.dev/router/introduction/)
+- [React Native Maps](https://github.com/react-native-maps/react-native-maps)
+
