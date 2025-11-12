@@ -1,10 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, RefreshControl, Modal, Alert } from 'react-native';
 import MapView, { Marker, Circle, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useEvents } from '@/hooks/useEvents';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFriends } from '@/contexts/FriendsContext';
 import { getDistanceKm, formatDistance } from '@/utils/distance';
 import { API_BASE_URL, DEFAULT_MAP_REGION, USER_LOCATION_RADIUS } from '@/config';
 import AddEditEventForm from '@/components/AddEditEventForm';
@@ -21,6 +22,7 @@ export default function MapScreen() {
   const { events, loading: eventsLoading, refetch: refetchEvents } = useEvents(API_BASE_URL, true);
   const { distanceUnit, showDistanceLabels } = useSettings();
   const { user, isAuthenticated } = useAuth();
+  const { friends } = useFriends();
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showAddEditModal, setShowAddEditModal] = useState(false);
@@ -112,7 +114,23 @@ export default function MapScreen() {
       }
     : DEFAULT_MAP_REGION;
 
-  const activeEvents = events.filter((e) => e.is_active);
+  const activeEvents = useMemo(() => {
+    const friendUserIds = new Set(friends.map(f => f.user_id));
+    
+    return events.filter((e) => {
+      if (!e.is_active) return false;
+      
+      // Show all 'everyone' events
+      if (!e.visibility || e.visibility === 'everyone') return true;
+      
+      // For 'friends' events, only show if user is friends with the creator
+      if (e.visibility === 'friends') {
+        return friendUserIds.has(e.user_id);
+      }
+      
+      return false;
+    });
+  }, [events, friends]);
 
   return (
     <View style={styles.container}>

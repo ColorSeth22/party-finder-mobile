@@ -65,6 +65,9 @@ export default function AddEditEventForm({
   const [coverCharge, setCoverCharge] = useState(existingEvent?.cover_charge || '');
   const [isByob, setIsByob] = useState(existingEvent?.is_byob || false);
   const [selectedTags, setSelectedTags] = useState<string[]>(existingEvent?.tags || []);
+  const [visibility, setVisibility] = useState<'everyone' | 'friends'>(
+    existingEvent?.visibility || 'everyone'
+  );
 
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -199,6 +202,7 @@ export default function AddEditEventForm({
         cover_charge: coverCharge.trim() || null,
         is_byob: isByob,
         tags: selectedTags,
+        visibility,
       };
 
       const url = isEditing
@@ -511,6 +515,34 @@ export default function AddEditEventForm({
             trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
             thumbColor={isByob ? '#ffffff' : '#f3f4f6'}
           />
+        </View>
+
+        <Text style={[styles.label, { color: theme.colors.text }]}>Visibility</Text>
+        <View style={[styles.segmentControl, { backgroundColor: theme.colors.border }]}>
+          <TouchableOpacity
+            style={[styles.segmentButton, visibility === 'everyone' && [styles.segmentActive, { backgroundColor: theme.colors.primary }]]}
+            onPress={() => setVisibility('everyone')}>
+            <Text
+              style={[
+                styles.segmentText,
+                { color: theme.colors.text },
+                visibility === 'everyone' && styles.segmentTextActive,
+              ]}>
+              Everyone
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.segmentButton, visibility === 'friends' && [styles.segmentActive, { backgroundColor: theme.colors.primary }]]}
+            onPress={() => setVisibility('friends')}>
+            <Text
+              style={[
+                styles.segmentText,
+                { color: theme.colors.text },
+                visibility === 'friends' && styles.segmentTextActive,
+              ]}>
+              Friends Only
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <TouchableOpacity

@@ -9,8 +9,10 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import * as Clipboard from 'expo-clipboard';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useTheme, COLOR_SCHEMES } from '@/utils/theme';
 
@@ -78,6 +80,27 @@ export default function ProfileScreen() {
           <View style={[styles.card, { backgroundColor: theme.colors.card }]}>
             <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Display Name</Text>
             <Text style={[styles.value, { color: theme.colors.text }]}>{user.display_name || 'Not set'}</Text>
+          </View>
+          <View style={[styles.card, { backgroundColor: theme.colors.card }]}>
+            <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Friend Code</Text>
+            <View style={styles.rowBetween}>
+              <Text style={[styles.valueMono, { color: theme.colors.text }]}>{user.friend_code || 'Generating…'}</Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={async () => {
+                  if (!user.friend_code) return;
+                  try {
+                    await Clipboard.setStringAsync(user.friend_code);
+                    Alert.alert('Copied', 'Friend code copied to clipboard');
+                  } catch (e) {
+                    Alert.alert('Error', 'Failed to copy the code');
+                  }
+                }}
+                style={[styles.copyButton, { backgroundColor: theme.colors.primary }]}>
+                <Text style={styles.copyButtonText}>Copy</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>Share this code so friends can add you.</Text>
           </View>
           <View style={[styles.card, { backgroundColor: theme.colors.card }]}>
             <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Reputation</Text>
@@ -273,6 +296,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f3f4f6',
   },
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   header: {
     padding: 20,
     backgroundColor: 'white',
@@ -298,6 +327,24 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     marginBottom: 12,
+  },
+  valueMono: {
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
+    fontSize: 16,
+    letterSpacing: 0.5,
+  },
+  copyButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  copyButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  helperText: {
+    marginTop: 8,
+    fontSize: 12,
   },
   label: {
     fontSize: 12,

@@ -14,6 +14,7 @@ import { useEvents } from '@/hooks/useEvents';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFriends } from '@/contexts/FriendsContext';
 import { getDistanceKm, formatDistance } from '@/utils/distance';
 import { API_BASE_URL } from '@/config';
 import AddEditEventForm from '@/components/AddEditEventForm';
@@ -35,6 +36,7 @@ export default function EventsListScreen() {
   const { coords } = useGeolocation();
   const { distanceUnit, themeMode, colorScheme } = useSettings();
   const { user, isAuthenticated } = useAuth();
+  const { friends } = useFriends();
   const theme = useTheme(themeMode, colorScheme);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -77,19 +79,27 @@ export default function EventsListScreen() {
 
   const decoratedEvents = useMemo<EventWithDistance[]>(() => {
     const now = new Date();
+    const friendUserIds = new Set(friends.map(f => f.user_id));
 
-    // Filter to only show events that haven't ended yet
+    // Filter to only show events that haven't ended yet and match visibility rules
     const upcoming = events.filter((event) => {
       if (!event.is_active) return false;
 
       // If there's an end_time, check if it's in the future
       if (event.end_time) {
         const endTime = new Date(event.end_time);
-        return endTime > now;
+        if (endTime <= now) return false;
       }
 
-      // If no end_time, always show active events
-      return true;
+      // Apply visibility filtering
+      if (!event.visibility || event.visibility === 'everyone') return true;
+      
+      // For 'friends' events, only show if user is friends with the creator
+      if (event.visibility === 'friends') {
+        return friendUserIds.has(event.user_id);
+      }
+
+      return false;
     });
 
     return upcoming
@@ -100,7 +110,7 @@ export default function EventsListScreen() {
         return { ...event, distanceKm };
       })
       .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
-  }, [events, coords]);
+  }, [events, coords, friends]);
 
   if (loading && events.length === 0) {
     return (
