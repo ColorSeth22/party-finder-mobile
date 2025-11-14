@@ -36,7 +36,8 @@ export type EventMedia = {
   event_id: string;
   user_id: string | null;
   media_type: 'image' | 'video';
-  media_url: string; // relative URL served from /uploads
+  mime_type: string; // e.g., 'image/jpeg', 'video/mp4'
+  file_size: number; // Size in bytes
   caption: string | null;
   created_at: string;
 };
