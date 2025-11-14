@@ -215,7 +215,7 @@ export default function AddEditEventForm({
         method,
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          'authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });

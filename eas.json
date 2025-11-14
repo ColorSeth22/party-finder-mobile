@@ -14,13 +14,14 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://party-finder-seven.vercel.app/"
+        "EXPO_PUBLIC_API_BASE_URL": "https://party-finder-seven.vercel.app"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://party-finder-seven.vercel.app/"
+        "EXPO_PUBLIC_DIAGNOSTICS_USER_EMAIL": "seths22222@gmail.com",
+        "EXPO_PUBLIC_API_BASE_URL": "https://party-finder-seven.vercel.app"
       }
     }
   },

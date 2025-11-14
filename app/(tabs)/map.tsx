@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, RefreshControl, Modal, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Alert } from 'react-native';
 import MapView, { Marker, Circle, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useEvents } from '@/hooks/useEvents';
@@ -9,24 +9,26 @@ import { useFriends } from '@/contexts/FriendsContext';
 import { getDistanceKm, formatDistance } from '@/utils/distance';
 import { API_BASE_URL, DEFAULT_MAP_REGION, USER_LOCATION_RADIUS } from '@/config';
 import AddEditEventForm from '@/components/AddEditEventForm';
+import MapEventCard from '@/components/MapEventCard';
+import { layoutStyles } from '@/styles/layout';
+import { buttonStyles } from '@/styles/buttons';
+import { mapStyles } from '@/styles/map';
 import type { Event } from '@/types';
 
-const HOST_LABELS: Record<Event['host_type'], string> = {
-  fraternity: 'Fraternity/Greek',
-  house: 'House Party',
-  club: 'Campus Club',
-};
+const CHECK_IN_RADIUS_KM = 0.1; // 100 meters
 
 export default function MapScreen() {
   const { coords, refetch: refetchLocation } = useGeolocation();
   const { events, loading: eventsLoading, refetch: refetchEvents } = useEvents(API_BASE_URL, true);
   const { distanceUnit, showDistanceLabels } = useSettings();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, token } = useAuth();
   const { friends } = useFriends();
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showAddEditModal, setShowAddEditModal] = useState(false);
   const [eventToEdit, setEventToEdit] = useState<Event | null>(null);
+  const [checkedInIds, setCheckedInIds] = useState<Set<string>>(new Set());
+  const [checkingIn, setCheckingIn] = useState<string | null>(null);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -90,7 +92,7 @@ export default function MapScreen() {
               Alert.alert('Success', 'Event deleted successfully');
               setSelectedEvent(null);
               refetchEvents();
-            } catch (err) {
+            } catch {
               Alert.alert('Error', 'Failed to delete event');
             }
           },
@@ -103,6 +105,112 @@ export default function MapScreen() {
     setShowAddEditModal(false);
     setEventToEdit(null);
     refetchEvents();
+  };
+
+  const handleEndEvent = async (event: Event) => {
+    if (!isAuthenticated || !token) {
+      Alert.alert('Login Required', 'Please login to end events');
+      return;
+    }
+
+    if (user?.user_id !== event.created_by) {
+      Alert.alert('Permission Denied', 'You can only end your own events');
+      return;
+    }
+
+    Alert.alert(
+      'End Event',
+      'Are you sure you want to end this event and archive it?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'End Event',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await fetch(`${API_BASE_URL}/api/events/${event.id}/archive`, {
+                method: 'POST',
+                headers: {
+                  'authorization': `Bearer ${token}`,
+                },
+              });
+
+              if (!res.ok) {
+                throw new Error('Failed to end event');
+              }
+
+              Alert.alert('Success', 'Event ended and archived successfully');
+              setSelectedEvent(null);
+              refetchEvents();
+            } catch {
+              Alert.alert('Error', 'Failed to end event');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCheckIn = async (event: Event) => {
+    if (!isAuthenticated || !token) {
+      Alert.alert('Login Required', 'Please login to check in');
+      return;
+    }
+
+    if (!coords) {
+      Alert.alert('Location Required', 'Enable location services to check in');
+      return;
+    }
+
+    // Check if event has started
+    const now = new Date();
+    const startTime = new Date(event.start_time);
+    if (now < startTime) {
+      Alert.alert('Too Early', 'This event hasn\'t started yet!');
+      return;
+    }
+
+    // Check proximity (100m radius)
+    const distance = getDistanceKm(
+      coords.latitude,
+      coords.longitude,
+      event.location_lat,
+      event.location_lng
+    );
+
+    if (distance > CHECK_IN_RADIUS_KM) {
+      const distanceText = formatDistance(distance, distanceUnit);
+      Alert.alert(
+        'Too Far Away',
+        `You must be within 100m of the event to check in. You are currently ${distanceText} away.`
+      );
+      return;
+    }
+
+    setCheckingIn(event.id);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/checkins`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ event_id: event.id }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to check in');
+      }
+
+      setCheckedInIds(prev => new Set(prev).add(event.id));
+      Alert.alert('Success', 'Checked in! Have fun 🎉');
+      refetchEvents(); // Refresh to get updated check-in count
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to check in');
+    } finally {
+      setCheckingIn(null);
+    }
   };
 
   const initialRegion = coords
@@ -133,9 +241,9 @@ export default function MapScreen() {
   }, [events, friends]);
 
   return (
-    <View style={styles.container}>
+    <View style={layoutStyles.container}>
       <MapView
-        style={styles.map}
+        style={mapStyles.map}
         provider={PROVIDER_DEFAULT}
         initialRegion={initialRegion}
         showsUserLocation
@@ -165,76 +273,28 @@ export default function MapScreen() {
       </MapView>
 
       {selectedEvent && (
-        <View style={styles.eventCard}>
-          <ScrollView
-            style={styles.eventScrollView}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-            <Text style={styles.eventTitle}>{selectedEvent.title}</Text>
-            <Text style={styles.eventHost}>{HOST_LABELS[selectedEvent.host_type]}</Text>
-            {selectedEvent.description && (
-              <Text style={styles.eventDescription}>{selectedEvent.description}</Text>
-            )}
-            <View style={styles.eventDetails}>
-              <Text style={styles.eventDetailText}>
-                🎉 Starts: {new Date(selectedEvent.start_time).toLocaleString()}
-              </Text>
-              {selectedEvent.end_time && (
-                <Text style={styles.eventDetailText}>
-                  ⏰ Ends: {new Date(selectedEvent.end_time).toLocaleString()}
-                </Text>
-              )}
-              {selectedEvent.theme && (
-                <Text style={styles.eventDetailText}>🎭 Theme: {selectedEvent.theme}</Text>
-              )}
-              {selectedEvent.music_type && (
-                <Text style={styles.eventDetailText}>🎵 Music: {selectedEvent.music_type}</Text>
-              )}
-              {selectedEvent.cover_charge && (
-                <Text style={styles.eventDetailText}>💵 Cover: {selectedEvent.cover_charge}</Text>
-              )}
-              {selectedEvent.is_byob && <Text style={styles.eventDetailText}>🍺 BYOB</Text>}
-              {coords && showDistanceLabels && (
-                <Text style={styles.eventDetailText}>
-                  📍{' '}
-                  {formatDistance(
-                    getDistanceKm(
-                      coords.latitude,
-                      coords.longitude,
-                      selectedEvent.location_lat,
-                      selectedEvent.location_lng
-                    ),
-                    distanceUnit
-                  )}
-                </Text>
-              )}
-            </View>
-            {user?.user_id === selectedEvent.created_by && (
-              <View style={styles.eventActions}>
-                <TouchableOpacity
-                  style={styles.editButton}
-                  onPress={() => handleEditEvent(selectedEvent)}>
-                  <Text style={styles.editButtonText}>✏️ Edit Event</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => handleDeleteEvent(selectedEvent)}>
-                  <Text style={styles.deleteButtonText}>🗑️ Delete Event</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setSelectedEvent(null)}>
-              <Text style={styles.closeButtonText}>Close</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
+        <MapEventCard
+          event={selectedEvent}
+          isOwner={user?.user_id === selectedEvent.created_by}
+          coords={coords}
+          distanceUnit={distanceUnit}
+          showDistanceLabels={showDistanceLabels}
+          refreshing={refreshing}
+          isCheckedIn={checkedInIds.has(selectedEvent.id)}
+          isCheckingIn={checkingIn === selectedEvent.id}
+          onRefresh={onRefresh}
+          onEdit={() => handleEditEvent(selectedEvent)}
+          onEnd={() => handleEndEvent(selectedEvent)}
+          onDelete={() => handleDeleteEvent(selectedEvent)}
+          onCheckIn={() => handleCheckIn(selectedEvent)}
+          onClose={() => setSelectedEvent(null)}
+        />
       )}
 
       {/* Add Event FAB */}
       {isAuthenticated && (
-        <TouchableOpacity style={styles.fab} onPress={handleAddEvent}>
-          <Text style={styles.fabText}>+</Text>
+        <TouchableOpacity style={[buttonStyles.fab, { backgroundColor: '#3b82f6' }]} onPress={handleAddEvent}>
+          <Text style={buttonStyles.fabText}>+</Text>
         </TouchableOpacity>
       )}
 
@@ -253,137 +313,10 @@ export default function MapScreen() {
       </Modal>
 
       {eventsLoading && !selectedEvent && (
-        <View style={styles.loadingOverlay}>
-          <Text style={styles.loadingText}>Loading events...</Text>
+        <View style={layoutStyles.loadingOverlay}>
+          <Text style={[layoutStyles.loadingText, { color: '#374151' }]}>Loading events...</Text>
         </View>
       )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  map: {
-    flex: 1,
-  },
-  eventCard: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '50%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  eventScrollView: {
-    padding: 20,
-  },
-  eventTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  eventHost: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginBottom: 12,
-  },
-  eventDescription: {
-    fontSize: 14,
-    color: '#374151',
-    marginBottom: 16,
-  },
-  eventDetails: {
-    marginBottom: 16,
-  },
-  eventDetailText: {
-    fontSize: 14,
-    color: '#4b5563',
-    marginBottom: 6,
-  },
-  eventActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  editButton: {
-    flex: 1,
-    backgroundColor: '#3b82f6',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  editButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  deleteButton: {
-    flex: 1,
-    backgroundColor: '#ef4444',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  deleteButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  closeButton: {
-    backgroundColor: '#ef4444',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  closeButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 30,
-    right: 30,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#3b82f6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  fabText: {
-    color: 'white',
-    fontSize: 32,
-    fontWeight: 'bold',
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 100,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 16,
-    marginHorizontal: 20,
-    borderRadius: 8,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#374151',
-  },
-});

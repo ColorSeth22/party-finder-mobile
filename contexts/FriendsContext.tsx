@@ -37,7 +37,7 @@ export function FriendsProvider({ children }: Props) {
       // Fetch friends
       const friendsRes = await fetch(`${API_BASE_URL}/api/friends`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'authorization': `Bearer ${token}`,
         },
       });
 
@@ -49,7 +49,7 @@ export function FriendsProvider({ children }: Props) {
       // Fetch friend requests
       const requestsRes = await fetch(`${API_BASE_URL}/api/friends/requests`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'authorization': `Bearer ${token}`,
         },
       });
 
@@ -85,7 +85,7 @@ export function FriendsProvider({ children }: Props) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(looksLikeEmail ? { email: identifier } : { code: identifier }),
       });
@@ -112,7 +112,7 @@ export function FriendsProvider({ children }: Props) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ requestId, action: 'accept' }),
       });
@@ -162,10 +162,10 @@ export function FriendsProvider({ children }: Props) {
     
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/friends?friendshipId=${friendshipId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/friends/${friendshipId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'authorization': `Bearer ${token}`,
         },
       });
 
@@ -192,7 +192,7 @@ export function FriendsProvider({ children }: Props) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ requestId, action: 'reject' }),
       });

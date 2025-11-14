@@ -24,3 +24,6 @@ export const LOCATION_ACCURACY = 'balanced'; // 'low' | 'balanced' | 'high' | 'b
 
 // User location radius circle (in meters)
 export const USER_LOCATION_RADIUS = 500;
+
+// Email of the user who can see the Diagnostics tab (empty disables)
+export const DIAGNOSTICS_USER_EMAIL = process.env.EXPO_PUBLIC_DIAGNOSTICS_USER_EMAIL || '';

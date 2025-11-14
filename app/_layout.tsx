@@ -7,6 +7,8 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SettingsProvider } from '@/contexts/SettingsContext';
 import { FriendsProvider } from '@/contexts/FriendsContext';
+import { EventsProvider } from '@/contexts/EventsContext';
+import { CheckInsProvider } from '@/contexts/CheckInsContext';
 import { API_BASE_URL } from '@/config';
 
 export const unstable_settings = {
@@ -20,16 +22,20 @@ export default function RootLayout() {
     <AuthProvider apiBaseUrl={API_BASE_URL}>
       <SettingsProvider>
         <FriendsProvider>
-          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-              }}>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-            </Stack>
-            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-          </ThemeProvider>
+          <EventsProvider apiBaseUrl={API_BASE_URL}>
+            <CheckInsProvider apiBaseUrl={API_BASE_URL}>
+              <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                  }}>
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+                </Stack>
+                <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+              </ThemeProvider>
+            </CheckInsProvider>
+          </EventsProvider>
         </FriendsProvider>
       </SettingsProvider>
     </AuthProvider>

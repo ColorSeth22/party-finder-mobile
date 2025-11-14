@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
 import {
-  StyleSheet,
   View,
   Text,
   ScrollView,
@@ -8,207 +7,164 @@ import {
   RefreshControl,
   ActivityIndicator,
   Modal,
-  Alert,
 } from 'react-native';
-import { useEvents } from '@/hooks/useEvents';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFriends } from '@/contexts/FriendsContext';
-import { getDistanceKm, formatDistance } from '@/utils/distance';
-import { API_BASE_URL } from '@/config';
+import { useEventsContext } from '@/contexts/EventsContext';
+import { useArchivedEvents } from '@/hooks/useArchivedEvents';
+import { useCheckIn } from '@/hooks/useCheckIn';
+import { useEventOperations } from '@/hooks/useEventOperations';
+import { getDistanceKm } from '@/utils/distance';
+import { filterAndDecorateEvents, decorateArchivedEvents } from '@/utils/eventFilters';
 import AddEditEventForm from '@/components/AddEditEventForm';
+import EventCard from '@/components/EventCard';
+import MediaModal from '@/components/MediaModal';
 import { useTheme } from '@/utils/theme';
+import { layoutStyles } from '@/styles/layout';
+import { buttonStyles } from '@/styles/buttons';
+import { eventCardStyles } from '@/styles/eventCard';
 import type { Event } from '@/types';
-
-const HOST_LABELS: Record<Event['host_type'], string> = {
-  fraternity: 'Fraternity/Greek',
-  house: 'House Party',
-  club: 'Campus Club',
-};
 
 type EventWithDistance = Event & {
   distanceKm: number | null;
 };
 
 export default function EventsListScreen() {
-  const { events, loading, refetch } = useEvents(API_BASE_URL, true);
+  const { events, eventsLoading, refetchEvents } = useEventsContext();
   const { coords } = useGeolocation();
   const { distanceUnit, themeMode, colorScheme } = useSettings();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, token } = useAuth();
   const { friends } = useFriends();
   const theme = useTheme(themeMode, colorScheme);
+  
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [showAddEditModal, setShowAddEditModal] = useState(false);
-  const [eventToEdit, setEventToEdit] = useState<Event | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [showMediaModal, setShowMediaModal] = useState(false);
+  const [mediaEvent, setMediaEvent] = useState<Event | null>(null);
+
+  // Custom hooks for modular logic
+  const { archivedEvents, loadingArchived, archivedAttendedIds, fetchArchived } = useArchivedEvents();
+
+  const { checkedInIds, checkingIn, handleCheckIn } = useCheckIn({
+    coords,
+    distanceUnit,
+    onSuccess: refetchEvents
+  });
+
+  const {
+    showAddEditModal,
+    eventToEdit,
+    handleAddEvent,
+    handleEditEvent,
+    handleEndEvent,
+    handleEventCreated,
+    setShowAddEditModal
+  } = useEventOperations();
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetch();
+    await refetchEvents();
     setRefreshing(false);
-  }, [refetch]);
+  }, [refetchEvents]);
 
-  const handleAddEvent = () => {
-    if (!isAuthenticated) {
-      Alert.alert('Login Required', 'Please login to create events');
-      return;
-    }
-    setEventToEdit(null);
-    setShowAddEditModal(true);
-  };
-
-  const handleEditEvent = (event: Event) => {
-    if (!isAuthenticated) {
-      Alert.alert('Login Required', 'Please login to edit events');
-      return;
-    }
-    if (user?.user_id !== event.created_by) {
-      Alert.alert('Permission Denied', 'You can only edit your own events');
-      return;
-    }
-    setEventToEdit(event);
-    setShowAddEditModal(true);
-  };
-
-  const handleEventCreated = () => {
-    setShowAddEditModal(false);
-    setEventToEdit(null);
-    refetch();
-  };
-
-  const decoratedEvents = useMemo<EventWithDistance[]>(() => {
-    const now = new Date();
-    const friendUserIds = new Set(friends.map(f => f.user_id));
-
-    // Filter to only show events that haven't ended yet and match visibility rules
-    const upcoming = events.filter((event) => {
-      if (!event.is_active) return false;
-
-      // If there's an end_time, check if it's in the future
-      if (event.end_time) {
-        const endTime = new Date(event.end_time);
-        if (endTime <= now) return false;
-      }
-
-      // Apply visibility filtering
-      if (!event.visibility || event.visibility === 'everyone') return true;
-      
-      // For 'friends' events, only show if user is friends with the creator
-      if (event.visibility === 'friends') {
-        return friendUserIds.has(event.user_id);
-      }
-
-      return false;
+  const liveDecoratedEvents = useMemo<EventWithDistance[]>(() => {
+    return filterAndDecorateEvents({
+      events,
+      coords,
+      friends,
+      getDistanceKm
     });
-
-    return upcoming
-      .map((event) => {
-        const distanceKm = coords
-          ? getDistanceKm(coords.latitude, coords.longitude, event.location_lat, event.location_lng)
-          : null;
-        return { ...event, distanceKm };
-      })
-      .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
   }, [events, coords, friends]);
 
-  if (loading && events.length === 0) {
+  const archivedDecoratedEvents = useMemo<EventWithDistance[]>(() => {
+    return decorateArchivedEvents(archivedEvents);
+  }, [archivedEvents]);
+
+  if (!showArchived && eventsLoading && events.length === 0) {
     return (
-      <View style={[styles.centerContainer, { backgroundColor: theme.colors.background }]}>
+      <View style={[layoutStyles.centerContainer, { backgroundColor: theme.colors.background }]}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={[styles.loadingText, { color: theme.colors.text }]}>Loading events...</Text>
+        <Text style={[layoutStyles.loadingText, { color: theme.colors.text }]}>Loading events...</Text>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.header, { backgroundColor: theme.colors.card, borderBottomColor: theme.colors.border }]}>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Upcoming Events</Text>
-        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>{decoratedEvents.length} events</Text>
+    <View style={[layoutStyles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[layoutStyles.header, { backgroundColor: theme.colors.card, borderBottomColor: theme.colors.border }]}>
+        <Text style={[layoutStyles.title, { color: theme.colors.text }]}>{showArchived ? 'Archived Events (Hosted or Attended)' : 'Upcoming Events'}</Text>
+        <Text style={[layoutStyles.subtitle, { color: theme.colors.textSecondary }]}> {showArchived ? archivedEvents.length : liveDecoratedEvents.length} events</Text>
       </View>
+      {isAuthenticated && (
+        <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+          <TouchableOpacity
+            style={[buttonStyles.checkInButton, { backgroundColor: theme.colors.primary }]}
+            onPress={() => {
+              if (!showArchived) {
+                fetchArchived();
+              }
+              setShowArchived(prev => !prev);
+            }}
+          >
+            <Text style={[buttonStyles.checkInButtonText, { color: '#fff' }]}>{showArchived ? 'Show Live' : 'Show Archived'}</Text>
+          </TouchableOpacity>
+          {showArchived && (
+            <TouchableOpacity
+              style={[buttonStyles.checkInButton, { backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border }]}
+              onPress={fetchArchived}
+              disabled={loadingArchived}
+            >
+              <Text style={[buttonStyles.checkInButtonText, { color: theme.colors.text }]}>{loadingArchived ? 'Refreshing…' : 'Refresh'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
       <ScrollView
-        style={styles.scrollView}
+        style={layoutStyles.scrollView}
+        contentContainerStyle={eventCardStyles.eventScrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.colors.primary]} />}>
-        {decoratedEvents.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={[styles.emptyText, { color: theme.colors.text }]}>No upcoming events</Text>
-            <Text style={[styles.emptySubtext, { color: theme.colors.textSecondary }]}>Check back later!</Text>
+        {(showArchived ? archivedDecoratedEvents : liveDecoratedEvents).length === 0 ? (
+          <View style={layoutStyles.emptyState}>
+            <Text style={[layoutStyles.emptyText, { color: theme.colors.text }]}>{showArchived ? 'No archived events yet' : 'No upcoming events'}</Text>
+            <Text style={[layoutStyles.emptySubtext, { color: theme.colors.textSecondary }]}>{showArchived ? 'Archive events you host to see them here.' : 'Check back later!'}</Text>
           </View>
         ) : (
-          decoratedEvents.map((event) => {
-            const isExpanded = expandedId === event.id;
-            return (
-              <TouchableOpacity
-                key={event.id}
-                style={[styles.eventCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
-                onPress={() => setExpandedId(isExpanded ? null : event.id)}>
-                <View style={styles.eventHeader}>
-                  <Text style={[styles.eventTitle, { color: theme.colors.text }]}>{event.title}</Text>
-                  {event.distanceKm !== null && (
-                    <Text style={[styles.distance, { color: theme.colors.primary }]}>
-                      {formatDistance(event.distanceKm, distanceUnit)}
-                    </Text>
-                  )}
-                </View>
-                <Text style={[styles.eventHost, { color: theme.colors.textSecondary }]}>{HOST_LABELS[event.host_type]}</Text>
-                <Text style={[styles.eventTime, { color: theme.colors.text }]}>
-                  🎉 {new Date(event.start_time).toLocaleString()}
-                </Text>
-
-                {isExpanded && (
-                  <View style={styles.expandedContent}>
-                    {event.description && (
-                      <Text style={[styles.eventDescription, { color: theme.colors.text }]}>{event.description}</Text>
-                    )}
-                    <View style={styles.eventDetails}>
-                      {event.end_time && (
-                        <Text style={[styles.detailText, { color: theme.colors.textSecondary }]}>
-                          ⏰ Ends: {new Date(event.end_time).toLocaleString()}
-                        </Text>
-                      )}
-                      {event.theme && <Text style={[styles.detailText, { color: theme.colors.textSecondary }]}>🎭 Theme: {event.theme}</Text>}
-                      {event.music_type && (
-                        <Text style={[styles.detailText, { color: theme.colors.textSecondary }]}>🎵 Music: {event.music_type}</Text>
-                      )}
-                      {event.cover_charge && (
-                        <Text style={[styles.detailText, { color: theme.colors.textSecondary }]}>💵 Cover: {event.cover_charge}</Text>
-                      )}
-                      {event.is_byob && <Text style={[styles.detailText, { color: theme.colors.textSecondary }]}>🍺 BYOB</Text>}
-                      {event.checkin_count !== undefined && (
-                        <Text style={[styles.detailText, { color: theme.colors.textSecondary }]}>
-                          👥 {event.checkin_count} checked in
-                        </Text>
-                      )}
-                    </View>
-                    {event.tags && event.tags.length > 0 && (
-                      <View style={styles.tags}>
-                        {event.tags.map((tag) => (
-                          <View key={tag} style={[styles.tag, { backgroundColor: theme.colors.primary + '20', borderColor: theme.colors.primary }]}>
-                            <Text style={[styles.tagText, { color: theme.colors.primary }]}>{tag}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                    {user?.user_id === event.created_by && (
-                      <TouchableOpacity
-                        style={[styles.editEventButton, { backgroundColor: theme.colors.primary }]}
-                        onPress={() => handleEditEvent(event)}>
-                        <Text style={styles.editEventButtonText}>✏️ Edit This Event</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })
+          (showArchived ? archivedDecoratedEvents : liveDecoratedEvents).map((event) => (
+            <EventCard
+              key={event.id}
+              event={event}
+              isExpanded={expandedId === event.id}
+              isOwner={user?.user_id === event.created_by}
+              distanceKm={event.distanceKm}
+              distanceUnit={distanceUnit}
+              theme={theme}
+              showCheckIn={isAuthenticated && user?.user_id !== event.created_by && !event.is_archived}
+              isCheckedIn={checkedInIds.has(event.id)}
+              isCheckingIn={checkingIn === event.id}
+              onToggleExpand={() => {
+                if (event.is_archived) {
+                  setMediaEvent(event);
+                  setShowMediaModal(true);
+                } else {
+                  setExpandedId(expandedId === event.id ? null : event.id);
+                }
+              }}
+              onEdit={() => handleEditEvent(event)}
+              onEnd={() => handleEndEvent(event)}
+              onCheckIn={() => handleCheckIn(event)}
+              ReplaySlot={null}
+            />
+          ))
         )}
       </ScrollView>
 
       {/* Add Event FAB */}
-      {isAuthenticated && (
-        <TouchableOpacity style={[styles.fab, { backgroundColor: theme.colors.primary }]} onPress={handleAddEvent}>
-          <Text style={styles.fabText}>+</Text>
+      {isAuthenticated && !showArchived && (
+        <TouchableOpacity style={[buttonStyles.fab, { backgroundColor: theme.colors.primary }]} onPress={handleAddEvent}>
+          <Text style={buttonStyles.fabText}>+</Text>
         </TouchableOpacity>
       )}
 
@@ -225,163 +181,17 @@ export default function EventsListScreen() {
           userLocation={coords}
         />
       </Modal>
+
+      {/* Archived Media Modal */}
+      <MediaModal
+        visible={showMediaModal}
+        event={mediaEvent}
+        token={token || null}
+        isHost={user?.user_id === mediaEvent?.created_by}
+        isAttendee={archivedAttendedIds.has(mediaEvent?.id || '')}
+        theme={theme}
+        onClose={() => { setShowMediaModal(false); setMediaEvent(null); }}
+      />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f3f4f6',
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f3f4f6',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  header: {
-    padding: 20,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  emptyState: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#6b7280',
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#9ca3af',
-  },
-  eventCard: {
-    backgroundColor: 'white',
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  eventHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  eventTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    flex: 1,
-    marginRight: 8,
-  },
-  distance: {
-    fontSize: 14,
-    color: '#3b82f6',
-    fontWeight: '600',
-  },
-  eventHost: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 8,
-  },
-  eventTime: {
-    fontSize: 14,
-    color: '#374151',
-    marginBottom: 4,
-  },
-  expandedContent: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  eventDescription: {
-    fontSize: 14,
-    color: '#374151',
-    marginBottom: 12,
-  },
-  eventDetails: {
-    marginBottom: 12,
-  },
-  detailText: {
-    fontSize: 14,
-    color: '#4b5563',
-    marginBottom: 4,
-  },
-  tags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  tag: {
-    backgroundColor: '#dbeafe',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  tagText: {
-    fontSize: 12,
-    color: '#1e40af',
-    fontWeight: '500',
-  },
-  editEventButton: {
-    backgroundColor: '#3b82f6',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  editEventButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 30,
-    right: 30,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#3b82f6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  fabText: {
-    color: 'white',
-    fontSize: 32,
-    fontWeight: 'bold',
-  },
-});

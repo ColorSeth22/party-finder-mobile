@@ -27,6 +27,18 @@ export type Event = {
   created_at: string;
   checkin_count?: number;
   visibility?: 'everyone' | 'friends';
+  is_archived?: boolean;
+  archived_at?: string | null;
+};
+
+export type EventMedia = {
+  media_id: string;
+  event_id: string;
+  user_id: string | null;
+  media_type: 'image' | 'video';
+  media_url: string; // relative URL served from /uploads
+  caption: string | null;
+  created_at: string;
 };
 
 export type Friend = {
