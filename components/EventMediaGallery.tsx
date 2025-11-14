@@ -153,7 +153,10 @@ export default function EventMediaGallery({ event, token, isHost, isAttendee, th
           renderItem={({ item }) => (
             <View style={{ width: 120 }}>
               {item.media_type === 'image' ? (
-                <Image source={{ uri: API_BASE_URL + item.media_url }} style={{ width: 120, height: 120, borderRadius: 8 }} />
+                <Image 
+                  source={{ uri: `${API_BASE_URL}/api/events/${event.id}/media/${item.media_id}/file` }} 
+                  style={{ width: 120, height: 120, borderRadius: 8 }} 
+                />
               ) : (
                 <View style={{ width: 120, height: 120, borderRadius: 8, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
                   <Text style={{ color: '#fff', fontSize: 12 }}>Video</Text>
